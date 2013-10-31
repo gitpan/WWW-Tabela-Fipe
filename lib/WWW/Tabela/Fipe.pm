@@ -6,7 +6,7 @@ use utf8;
 use HTML::Entities;
 use HTTP::Request::Common qw(POST);
 
-our $VERSION = 0.001;
+our $VERSION = 0.002;
 
 has [ qw/marcas viewstate eventvalidation/ ] => ( is => 'rw' );
 
@@ -81,7 +81,7 @@ sub _form {
       ddlAnoValor         => ( !exists $args->{ano} ) ? 0 : $args->{ ano },
       ddlMarca            => ( !exists $args->{marca} ) ? 0 : $args->{ marca },
       ddlModelo           => ( !exists $args->{modelo} ) ? 0 : $args->{ modelo },
-      ddlTabelaReferencia => 154,
+      ddlTabelaReferencia => $args->{ tb_referencia },
       txtCodFipe          => '',
     ];
 }
@@ -91,6 +91,7 @@ sub search {
   my $marcas           = $self->tree->findnodes( '//select[@name="ddlMarca"]/option' );
   my $viewstate        = $self->tree->findnodes( '//form[@id="form1"]//input[@id="__VIEWSTATE"]' )->get_node->attr('value');
   my $event_validation = $self->tree->findnodes( '//form[@id="form1"]//input[@id="__EVENTVALIDATION"]' )->get_node->attr('value');
+  my $tabela_referencia = $self->tree->findnodes( '//select[@name="ddlTabelaReferencia"]/option[@selected="selected"]' )->get_node->attr( 'value' );
   foreach my $marca ( $marcas->get_nodelist ) {
     my $form = $self->_form( {
         script_manager => 'UdtMarca|ddlMarca',
@@ -98,13 +99,15 @@ sub search {
         event_validation=> $event_validation,
         viewstate       => $viewstate,
         marca           => $marca->attr( 'value' ),
+        tb_referencia   => $tabela_referencia,
     } );
     $self->prepend( busca_marca => 'url' , {
       passed_key_values => {
           marca     => $marca->as_text,
           marca_id  => $marca->attr( 'value' ),
           tipo      => $self->robot->reader->passed_key_values->{ tipo },
-          referer   => $self->robot->reader->passed_key_values->{referer },
+          referer   => $self->robot->reader->passed_key_values->{ referer },
+          tb_referencia => $tabela_referencia,
       },
       request => [
         'POST',
@@ -123,7 +126,9 @@ sub busca_marca {
   my ( $captura1, $viewstate )         = $self->robot->useragent->content =~ m/hiddenField\|__EVENTTARGET(.+)__VIEWSTATE\|([^\|]+)\|/g;
   my ( $captura_1, $event_validation ) = $self->robot->useragent->content =~ m/hiddenField\|__EVENTTARGET(.+)__EVENTVALIDATION\|([^\|]+)\|/g;
   my $modelos = $self->tree->findnodes( '//select[@name="ddlModelo"]/option' );
+
   foreach my $modelo ( $modelos->get_nodelist ) {
+
 
 
     next unless $modelo->as_text !~ m/selecione/ig;
@@ -134,6 +139,8 @@ sub busca_marca {
     $kv->{ marca }      = $self->robot->reader->passed_key_values->{ marca };
     $kv->{ tipo }       = $self->robot->reader->passed_key_values->{ tipo };
     $kv->{ referer }    = $self->robot->reader->passed_key_values->{ referer };
+    $kv->{ tb_referencia }    = $self->robot->reader->passed_key_values->{ tb_referencia };
+
     my $form = $self->_form( {
         script_manager => 'updModelo|ddlModelo',
         event_target   =>  'ddlModelo',
@@ -141,6 +148,7 @@ sub busca_marca {
         viewstate       => $viewstate,
         marca           => $kv->{ marca_id },
         modelo          => $kv->{ modelo_id },
+        tb_referencia   => $self->robot->reader->passed_key_values->{ tb_referencia },
     } );
     $self->prepend( busca_modelo => '', {
       passed_key_values => $kv,
@@ -158,8 +166,9 @@ sub busca_marca {
 
 sub busca_modelo {
   my ( $self ) = @_; 
-  my $anos = $self->tree->findnodes( '//select[@name="ddlAnoValor"]/option' );
+  my $anos = $self->tree->findnodes( '//select[@id="ddlAnoValor"]//option' );
   foreach my $ano ( $anos->get_nodelist ) {
+
     my $kv = {};
     $kv->{ ano_id }     = $ano->attr( 'value' );
     $kv->{ ano }        = $ano->as_text;
@@ -169,6 +178,7 @@ sub busca_modelo {
     $kv->{ marca }      = $self->robot->reader->passed_key_values->{ marca };
     $kv->{ tipo }       = $self->robot->reader->passed_key_values->{ tipo };
     $kv->{ referer }    = $self->robot->reader->passed_key_values->{ referer };
+    $kv->{ tb_referencia }    = $self->robot->reader->passed_key_values->{ tb_referencia };
     next unless $ano->as_text !~ m/selecione/ig;
 
     my ( $captura1, $viewstate )         = $self->robot->useragent->content =~ m/hiddenField\|__EVENTTARGET(.*)__VIEWSTATE\|([^\|]+)\|/g;
@@ -181,6 +191,7 @@ sub busca_modelo {
         marca           => $kv->{ marca_id },
         modelo          => $kv->{ modelo_id },
         ano             => $kv->{ ano_id },
+        tb_referencia   => $self->robot->reader->passed_key_values->{ tb_referencia },
     } );
 
     $self->prepend( busca_ano => '', {
@@ -208,7 +219,7 @@ sub busca_ano {
   $item->{ preco }            = $self->tree->findvalue('//span[@id="lblValor"]');
   $item->{ data }             = $self->tree->findvalue('//span[@id="lblData"]');
   $item->{ tipo }             = $self->robot->reader->passed_key_values->{ tipo } ;
-  warn p $item;
+  $item->{ tb_referencia }    = $self->robot->reader->passed_key_values->{ tb_referencia };
 
   push( @{$self->veiculos}, $item );
 }
@@ -219,7 +230,6 @@ sub on_link {
 
 sub on_finish {
     my ( $self ) = @_; 
-    warn "Terminou.... exportando dados.........";
     $self->robot->writer->write( $self->veiculos );
 }
 

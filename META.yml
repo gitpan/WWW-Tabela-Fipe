@@ -27,4 +27,4 @@ requires:
   JSON::XS: 0
   Moo: 0
   Test::Simple: 0.44
-version: 0.001
+version: 0.002
